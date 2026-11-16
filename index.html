@@ -112,10 +112,10 @@ function updateStats(){document.getElementById('score').textContent=score;docume
 function updateTimer(){clearInterval(gameInterval);gameInterval=setInterval(()=>{if(isGameOver||isPaused)return;if(!checkCollision(blockX,blockY+1,currentPiece)){blockY++;lastActionWasRotate=false;lastKickIndex=-1;clearLockTimer()}else if(lockTimer===null)lockTimer=setTimeout(hardLock,LOCK_DELAY);draw()},currentSpeed)}
 function getGhostY(){let gy=blockY;while(!checkCollision(blockX,gy+1,currentPiece))gy++;return gy}
 function draw(){ctx.fillStyle='#050508';ctx.fillRect(0,0,canvas.width,canvas.height);for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(board[r][c]){ctx.fillStyle=COLORS[board[r][c]];ctx.fillRect(c*BLOCK_SIZE,r*BLOCK_SIZE,BLOCK_SIZE-1,BLOCK_SIZE-1)}if(isGameOver){drawGameOverScreen();return}if(isPaused){drawPauseScreen();return}const gy=getGhostY();ctx.strokeStyle=COLORS[currentType];ctx.lineWidth=1;for(let r=0;r<currentPiece.length;r++)for(let c=0;c<currentPiece[r].length;c++)if(currentPiece[r][c])ctx.strokeRect((blockX+c)*BLOCK_SIZE+1,(gy+r)*BLOCK_SIZE+1,BLOCK_SIZE-3,BLOCK_SIZE-3);ctx.fillStyle=COLORS[currentType];for(let r=0;r<currentPiece.length;r++)for(let c=0;c<currentPiece[r].length;c++)if(currentPiece[r][c])ctx.fillRect((blockX+c)*BLOCK_SIZE,(blockY+r)*BLOCK_SIZE,BLOCK_SIZE-1,BLOCK_SIZE-1)}
-function drawGameOverScreen(){ctx.fillStyle='rgba(0,0,0,.82)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.textAlign='center';ctx.fillStyle='#ff3333';ctx.font='bold 22px monospace';ctx.fillText('GAME OVER',120,180);ctx.fillStyle='#fff';ctx.font='13px monospace';ctx.fillText('SCORE: '+score,120,230);ctx.fillText('LINES: '+linesCleared,120,255);ctx.fillStyle='#00ffcc';ctx.font='bold 12px monospace';ctx.fillText('[ タップでリトライ ]',120,320)}
+function drawGameOverScreen(){ctx.fillStyle='rgba(0,0,0,.88)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.textAlign='center';if(mpConnected&&mpMatchResult){ctx.fillStyle=mpMatchResult==='win'?'#00ffcc':mpMatchResult==='lose'?'#ff6677':'#ffe08a';ctx.font='bold 28px monospace';ctx.fillText(mpMatchResult==='win'?'YOU WIN!':mpMatchResult==='lose'?'YOU LOSE':'DRAW',120,155);ctx.fillStyle='#fff';ctx.font='bold 14px monospace';ctx.fillText('あなた: '+score,120,210);ctx.fillText('相手: '+mpOpponent.score,120,240);ctx.fillStyle='#9fe5ff';ctx.font='12px monospace';ctx.fillText('対戦終了！',120,300);ctx.fillText('部屋を閉じて新しい対戦を始めてね',120,330);return}ctx.fillStyle='#ff3333';ctx.font='bold 22px monospace';ctx.fillText('GAME OVER',120,180);ctx.fillStyle='#fff';ctx.font='13px monospace';ctx.fillText('SCORE: '+score,120,230);ctx.fillText('LINES: '+linesCleared,120,255);ctx.fillStyle='#00ffcc';ctx.font='bold 12px monospace';ctx.fillText(mpConnected?'相手の終了を待っています…':'[ タップでリトライ ]',120,320)}
 function drawHold(){holdCtx.fillStyle='#000';holdCtx.fillRect(0,0,holdCanvas.width,holdCanvas.height);if(!holdType)return;const p=SHAPES[holdType],sz=12,ox=(holdCanvas.width-p[0].length*sz)/2,oy=(holdCanvas.height-p.length*sz)/2;holdCtx.fillStyle=COLORS[holdType];for(let r=0;r<p.length;r++)for(let c=0;c<p[r].length;c++)if(p[r][c])holdCtx.fillRect(ox+c*sz,oy+r*sz,sz-1,sz-1)}
 function drawNext(){nextCtx.fillStyle='#000';nextCtx.fillRect(0,0,nextCanvas.width,nextCanvas.height);const sz=10;for(let i=0;i<nextQueue.length;i++){const type=nextQueue[i],p=SHAPES[type],ox=(nextCanvas.width-p[0].length*sz)/2,oy=i*28+4;nextCtx.fillStyle=COLORS[type];for(let r=0;r<p.length;r++)for(let c=0;c<p[r].length;c++)if(p[r][c])nextCtx.fillRect(ox+c*sz,oy+r*sz,sz-1,sz-1)}}
-function resetGame(){clearLockTimer();clearInterval(gameInterval);isGameOver=false;isPaused=false;document.getElementById('btn-pause').textContent='⏸ 一時停止';document.getElementById('btn-pause').style.background='#222';document.getElementById('btn-pause-main').textContent='⏸ 一時停止 [P]';document.getElementById('btn-pause-main').style.background='#333311';board=Array.from({length:ROWS},()=>Array(COLS).fill(0));score=0;linesCleared=0;level=1;renCount=-1;currentSpeed=500;bag=[];holdType=0;hasHeld=false;initQueue();spawnPiece();drawHold();updateStats();updateTimer();draw()}
+function resetGame(){if(mpConnected&&isGameOver){showActionText(mpMatchResult?'対戦終了！新しい部屋を作ってね':'相手の終了を待っています…');return}clearLockTimer();clearInterval(gameInterval);isGameOver=false;isPaused=false;document.getElementById('btn-pause').textContent='⏸ 一時停止';document.getElementById('btn-pause').style.background='#222';document.getElementById('btn-pause-main').textContent='⏸ 一時停止 [P]';document.getElementById('btn-pause-main').style.background='#333311';board=Array.from({length:ROWS},()=>Array(COLS).fill(0));score=0;linesCleared=0;level=1;renCount=-1;currentSpeed=500;bag=[];holdType=0;hasHeld=false;initQueue();spawnPiece();drawHold();updateStats();updateTimer();draw()}
 const DAS=130,ARR=25,keys={Left:{active:false,das:null,arr:null},Right:{active:false,das:null,arr:null},Down:{active:false,das:null,arr:null}};
 function clearKeyTimers(type){clearTimeout(keys[type].das);clearInterval(keys[type].arr);keys[type].das=keys[type].arr=null}
 function move(dx,dy){if(isGameOver||isPaused)return;if(!checkCollision(blockX+dx,blockY+dy,currentPiece)){blockX+=dx;blockY+=dy;lastActionWasRotate=false;lastKickIndex=-1;resetLockTimer();draw()}}
@@ -132,13 +132,14 @@ document.getElementById('btn-close').addEventListener('click',()=>{window.close(
 board=Array.from({length:ROWS},()=>Array(COLS).fill(0));initQueue();spawnPiece();drawHold();updateStats();updateTimer();draw();
 
 /* Online multiplayer: independent Cloudflare Worker endpoint. */
-let mpSocket=null,mpRoomCode="",mpRole="",mpConnected=false,mpOpponent={score:0,lines:0,level:1,gameOver:false};
+let mpSocket=null,mpRoomCode="",mpRole="",mpConnected=false,mpMatchResult=null,mpOpponent={score:0,lines:0,level:1,gameOver:false};
 const mpOverlay=document.getElementById('mp-overlay');
 const mpEndpoint=document.getElementById('mp-endpoint');
 const mpRoomInput=document.getElementById('mp-room-input');
 const mpMessage=document.getElementById('mp-message');
 const mpRoomDisplay=document.getElementById('mp-room');
 function mpShow(message){mpMessage.textContent=message}
+function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)return;mpMatchResult=score>mpOpponent.score?'win':score<mpOpponent.score?'lose':'draw';draw()}
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
 function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
@@ -161,7 +162,7 @@ function mpConnect(mode){
     if(data.type==='waiting'){mpShow('部屋を作成しました。相手に6桁の番号を伝えてね');return}
     if(data.type==='error'){mpShow(data.message||'接続エラー');return}
     if(data.type==='match-start'){
-      mpConnected=true;mpRole=data.role||'';mpOpponent={score:0,lines:0,level:1,gameOver:false};
+      mpConnected=true;mpRole=data.role||'';mpMatchResult=null;mpOpponent={score:0,lines:0,level:1,gameOver:false};
       mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中 / SCORE 0';
       resetGame();mpShow('対戦スタート！');return;
     }
@@ -169,7 +170,7 @@ function mpConnect(mode){
       mpOpponent={score:Number(data.score)||0,lines:Number(data.lines)||0,level:Number(data.level)||1,gameOver:!!data.gameOver};
       const status=document.getElementById('mp-opponent');
       status.textContent='相手: SCORE '+mpOpponent.score+' / LINE '+mpOpponent.lines+(mpOpponent.gameOver?' / FINISH':'');
-      if(mpOpponent.gameOver&&isGameOver){showActionText(score>mpOpponent.score?'YOU WIN!':score<mpOpponent.score?'YOU LOSE':'DRAW');}
+      mpCheckResult();
       return;
     }
     if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断';showActionText('OPPONENT LEFT');return}
@@ -184,7 +185,7 @@ document.getElementById('mp-close').addEventListener('click',()=>{if(!mpConnecte
 const mpOriginalUpdateStats=updateStats;
 updateStats=function(){mpOriginalUpdateStats();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:isGameOver})};
 const mpOriginalTriggerGameOver=triggerGameOver;
-triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected){mpSend({type:'state',score,lines:linesCleared,level,gameOver:true});if(mpOpponent.gameOver)showActionText(score>mpOpponent.score?'YOU WIN!':score<mpOpponent.score?'YOU LOSE':'DRAW')}};
+triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected){mpSend({type:'state',score,lines:linesCleared,level,gameOver:true});mpCheckResult()}};
 window.addEventListener('beforeunload',()=>{if(mpSocket)mpSocket.close()});
 
 </script>
