@@ -142,7 +142,8 @@ function mpShow(message){mpMessage.textContent=message}
 function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)return;mpMatchResult=score>mpOpponent.score?'win':score<mpOpponent.score?'lose':'draw';draw()}
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
-function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}\nfunction applyGarbageLines(amount){if(isGameOver)return;clearLockTimer();let topOut=false;for(let i=0;i<amount;i++){if(board[0].some(cell=>cell!==0))topOut=true;board.shift();const row=Array(COLS).fill(8);let hole=Math.floor(Math.random()*COLS);if(i>0&&hole===applyGarbageLines.lastHole)hole=(hole+1+Math.floor(Math.random()*(COLS-1)))%COLS;applyGarbageLines.lastHole=hole;row[hole]=0;board.push(row)}if(topOut){triggerGameOver()}else draw()}
+function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
+function applyGarbageLines(amount){if(isGameOver)return;clearLockTimer();let topOut=false;for(let i=0;i<amount;i++){if(board[0].some(cell=>cell!==0))topOut=true;board.shift();const row=Array(COLS).fill(8);let hole=Math.floor(Math.random()*COLS);if(i>0&&hole===applyGarbageLines.lastHole)hole=(hole+1+Math.floor(Math.random()*(COLS-1)))%COLS;applyGarbageLines.lastHole=hole;row[hole]=0;board.push(row)}if(topOut){triggerGameOver()}else draw()}
 function mpDisconnect(){if(mpSocket){mpSocket.close(1000,'player left');mpSocket=null}mpConnected=false;mpRoomCode='';mpRole='';document.getElementById('mp-opponent').style.display='none'}
 function mpConnect(mode){
   if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
@@ -166,7 +167,12 @@ function mpConnect(mode){
       mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中 / SCORE 0';
       resetGame();mpShow('対戦スタート！');return;
     }
-    if(data.type==='opponent-attack'){\n      const amount=Math.max(2,Math.min(4,Math.floor(Number(data.lines)||0)));\n      if(amount>=2){applyGarbageLines(amount);showActionText('お邪魔 '+amount+' LINE!');}\n      return;\n    }\n    if(data.type==='opponent-state'){
+    if(data.type==='opponent-attack'){
+      const amount=Math.max(2,Math.min(4,Math.floor(Number(data.lines)||0)));
+      if(amount>=2){applyGarbageLines(amount);showActionText('お邪魔 '+amount+' LINE!');}
+      return;
+    }
+    if(data.type==='opponent-state'){
       mpOpponent={score:Number(data.score)||0,lines:Number(data.lines)||0,level:Number(data.level)||1,gameOver:!!data.gameOver};
       const status=document.getElementById('mp-opponent');
       status.textContent='相手: SCORE '+mpOpponent.score+' / LINE '+mpOpponent.lines+(mpOpponent.gameOver?' / FINISH':'');
