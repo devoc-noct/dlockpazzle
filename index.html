@@ -78,7 +78,7 @@ let holdType=0,hasHeld=false,lockTimer=null,lockResetCount=0;
 const MAX_LOCK_RESETS=15,LOCK_DELAY=500;
 let lastActionWasRotate=false,isTSpin=false,lastKickIndex=-1;
 const SHAPES=[[],[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],[[2,2],[2,2]],[[0,3,3],[3,3,0],[0,0,0]],[[4,4,0],[0,4,4],[0,0,0]],[[5,0,0],[5,5,5],[0,0,0]],[[0,0,6],[6,6,6],[0,0,0]],[[0,7,0],[7,7,7],[0,0,0]]];
-const COLORS=['#000000','#43A5FF','#FFD166','#EF476F','#06D6A0','#B388EB','#FF8C42','#E9ECEF'];
+const COLORS=['#000000','#43A5FF','#FFD166','#EF476F','#06D6A0','#B388EB','#FF8C42','#E9ECEF','#777777'];
 // SRS wall-kick data. Coordinates use positive Y upward; screen coordinates are inverted below.
 const JLSTZ_KICK={
  '0->1':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],'1->0':[[0,0],[1,0],[1,-1],[0,2],[1,2]],
@@ -143,7 +143,7 @@ function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)retu
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
 function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
-function applyGarbageLines(amount){if(isGameOver)return;clearLockTimer();let topOut=false;for(let i=0;i<amount;i++){if(board[0].some(cell=>cell!==0))topOut=true;board.shift();const row=Array(COLS).fill(8);let hole=Math.floor(Math.random()*COLS);if(i>0&&hole===applyGarbageLines.lastHole)hole=(hole+1+Math.floor(Math.random()*(COLS-1)))%COLS;applyGarbageLines.lastHole=hole;row[hole]=0;board.push(row)}if(topOut){triggerGameOver()}else draw()}
+function applyGarbageLines(amount){if(isGameOver)return;clearLockTimer();let topOut=false;for(let i=0;i<amount;i++){if(board[0].some(cell=>cell!==0))topOut=true;board.shift();const row=Array(COLS).fill(8);let hole=Math.floor(Math.random()*COLS);if(i>0&&hole===applyGarbageLines.lastHole)hole=(hole+1+Math.floor(Math.random()*(COLS-1)))%COLS;applyGarbageLines.lastHole=hole;row[hole]=0;board.push(row)}if(topOut||checkCollision(blockX,blockY,currentPiece)){triggerGameOver()}else draw()}
 function mpDisconnect(){if(mpSocket){mpSocket.close(1000,'player left');mpSocket=null}mpConnected=false;mpRoomCode='';mpRole='';document.getElementById('mp-opponent').style.display='none'}
 function mpConnect(mode){
   if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
