@@ -184,7 +184,7 @@ document.getElementById('mp-close').addEventListener('click',()=>{if(!mpConnecte
 const mpOriginalUpdateStats=updateStats;
 updateStats=function(){mpOriginalUpdateStats();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:isGameOver})};
 const mpOriginalTriggerGameOver=triggerGameOver;
-triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:true})};
+triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected){mpSend({type:'state',score,lines:linesCleared,level,gameOver:true});if(mpOpponent.gameOver)showActionText(score>mpOpponent.score?'YOU WIN!':score<mpOpponent.score?'YOU LOSE':'DRAW')}};
 window.addEventListener('beforeunload',()=>{if(mpSocket)mpSocket.close()});
 
 </script>
