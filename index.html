@@ -24,10 +24,36 @@ canvas#game{background:#050508;border:2px solid #333;height:88vh;width:auto;aspe
 .action-pad{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1.3fr;gap:8px;width:100%;height:60%}.btn-rot-l{grid-column:1;grid-row:1;background:#113322;border-color:#226644;font-size:14px}.btn-rot-r{grid-column:2;grid-row:1;background:#113322;border-color:#226644;font-size:14px}.btn-drop{grid-column:1/span 2;grid-row:2;background:#441111;border-color:#882222;color:#ffaaaa;font-size:16px}
 canvas.sub-canvas{background:#000;border-radius:4px}
 @media(max-height:420px){.container{padding-top:25px}.controls-left,.controls-right{width:27vw}.btn-hold{height:35px}.dpad{height:68%}.action-pad{height:58%}}
+
+#btn-multiplayer{background:#102b3b;border-color:#28708f;color:#9fe5ff}
+#mp-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;padding:18px;font-family:monospace}
+#mp-overlay.open{display:flex}
+#mp-card{width:min(440px,96vw);background:#101820;border:1px solid #28708f;border-radius:12px;padding:18px;box-shadow:0 12px 40px #000;text-align:center}
+#mp-card h2{font-size:20px;color:#9fe5ff;margin-bottom:12px}
+#mp-card p{font-size:12px;color:#c7d3dc;line-height:1.7;margin:8px 0}
+#mp-card input{width:100%;padding:11px;margin:5px 0;background:#05090d;border:1px solid #456;color:#fff;border-radius:6px;font:14px monospace;user-select:text}
+.mp-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mp-actions button,#mp-close{padding:11px;border-radius:7px;border:1px solid #28708f;background:#123247;color:#dff7ff;font-weight:bold}
+#mp-join{background:#26351b;border-color:#668b36;color:#e6ffc8}
+#mp-close{margin-top:10px;width:100%;background:#292929;border-color:#555;color:#ddd}
+#mp-room{font-size:28px;letter-spacing:5px;color:#00ffcc;font-weight:bold;padding:8px}
+#mp-message{min-height:22px;color:#ffe08a}
+#mp-opponent{position:absolute;top:32px;right:8px;z-index:120;background:#101820;border:1px solid #28708f;border-radius:5px;padding:5px 8px;font-size:10px;color:#9fe5ff;display:none}
+
 </style>
 </head>
 <body>
-<div class="system-bar"><button class="sys-btn" id="btn-fullscreen">⛶ 全画面表示</button><button class="sys-btn sys-btn-pause" id="btn-pause">⏸ 一時停止</button><button class="sys-btn sys-btn-close" id="btn-close">✕ 閉じる</button></div>
+<div class="system-bar"><button class="sys-btn" id="btn-fullscreen">⛶ 全画面表示</button><button class="sys-btn" id="btn-multiplayer">⚔ 二人対戦</button><button class="sys-btn sys-btn-pause" id="btn-pause">⏸ 一時停止</button><button class="sys-btn sys-btn-close" id="btn-close">✕ 閉じる</button></div>
+<div id="mp-opponent">相手: 待機中</div>
+<div id="mp-overlay"><div id="mp-card">
+<h2>オンライン二人対戦</h2>
+<p>別々の端末で同じ部屋番号を使って参加してね。通信サーバーのURLを入力してから部屋を作成／参加します。</p>
+<input id="mp-endpoint" type="url" placeholder="wss://あなたのWorker名.workers.dev/ws" aria-label="通信サーバーURL">
+<input id="mp-room-input" inputmode="numeric" maxlength="6" placeholder="部屋番号（参加する場合）" aria-label="部屋番号">
+<div class="mp-actions"><button id="mp-create">部屋を作る</button><button id="mp-join">番号で参加</button></div>
+<div id="mp-room"></div><p id="mp-message">通信サーバー未接続</p>
+<button id="mp-close">閉じる</button>
+</div></div>
 <div class="container">
  <div class="controls-left">
   <div class="panel"><div class="panel-title">HOLD</div><canvas id="hold-canvas" class="sub-canvas" width="64" height="42"></canvas></div>
@@ -104,6 +130,63 @@ window.addEventListener('keyup',e=>{if(e.code==='ArrowLeft')stopKey('Left');if(e
 document.getElementById('btn-pause').addEventListener('click',togglePause);document.getElementById('btn-pause-main').addEventListener('click',togglePause);document.getElementById('btn-pause-main').addEventListener('touchstart',e=>{e.preventDefault();togglePause()},{passive:false});
 document.getElementById('btn-close').addEventListener('click',()=>{window.close();setTimeout(()=>showActionText('タブを閉じるにはブラウザの「×」を押してください'),300)});
 board=Array.from({length:ROWS},()=>Array(COLS).fill(0));initQueue();spawnPiece();drawHold();updateStats();updateTimer();draw();
+
+/* Online multiplayer: independent Cloudflare Worker endpoint. */
+let mpSocket=null,mpRoomCode="",mpRole="",mpConnected=false,mpOpponent={score:0,lines:0,level:1,gameOver:false};
+const mpOverlay=document.getElementById('mp-overlay');
+const mpEndpoint=document.getElementById('mp-endpoint');
+const mpRoomInput=document.getElementById('mp-room-input');
+const mpMessage=document.getElementById('mp-message');
+const mpRoomDisplay=document.getElementById('mp-room');
+function mpShow(message){mpMessage.textContent=message}
+function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
+function mpClose(){mpOverlay.classList.remove('open')}
+function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
+function mpDisconnect(){if(mpSocket){mpSocket.close(1000,'player left');mpSocket=null}mpConnected=false;mpRoomCode='';mpRole='';document.getElementById('mp-opponent').style.display='none'}
+function mpConnect(mode){
+  if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
+  const raw=mpEndpoint.value.trim();
+  if(!raw){mpShow('先にCloudflare WorkerのURLを入力してください');return}
+  let endpoint;
+  try{endpoint=new URL(raw);if(endpoint.protocol==='https:')endpoint.protocol='wss:';if(endpoint.protocol==='http:')endpoint.protocol='ws:';if(!['ws:','wss:'].includes(endpoint.protocol))throw new Error('protocol');endpoint.pathname=endpoint.pathname.replace(/\/$/,'');if(!endpoint.pathname.endsWith('/ws'))endpoint.pathname+='/ws';}
+  catch(e){mpShow('Worker URLを確認してください');return}
+  mpRoomCode=mode==='create'?String(Math.floor(100000+Math.random()*900000)):mpRoomInput.value.trim();
+  if(!/^\d{6}$/.test(mpRoomCode)){mpShow('部屋番号は6桁の数字です');return}
+  endpoint.searchParams.set('room',mpRoomCode);
+  mpShow('通信サーバーに接続中…');mpRoomDisplay.textContent=mpRoomCode;
+  try{mpSocket=new WebSocket(endpoint.toString())}catch(e){mpShow('接続を開始できませんでした');return}
+  mpSocket.addEventListener('open',()=>{mpSend({type:mode,room:mpRoomCode});mpShow(mode==='create'?'部屋を作成しました。相手の参加を待っています…':'部屋に参加しました。対戦相手を確認中…')});
+  mpSocket.addEventListener('message',event=>{
+    let data;try{data=JSON.parse(event.data)}catch(e){return}
+    if(data.type==='waiting'){mpShow('部屋を作成しました。相手に6桁の番号を伝えてね');return}
+    if(data.type==='error'){mpShow(data.message||'接続エラー');return}
+    if(data.type==='match-start'){
+      mpConnected=true;mpRole=data.role||'';mpOpponent={score:0,lines:0,level:1,gameOver:false};
+      mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中 / SCORE 0';
+      resetGame();mpShow('対戦スタート！');return;
+    }
+    if(data.type==='opponent-state'){
+      mpOpponent={score:Number(data.score)||0,lines:Number(data.lines)||0,level:Number(data.level)||1,gameOver:!!data.gameOver};
+      const status=document.getElementById('mp-opponent');
+      status.textContent='相手: SCORE '+mpOpponent.score+' / LINE '+mpOpponent.lines+(mpOpponent.gameOver?' / FINISH':'');
+      if(mpOpponent.gameOver&&isGameOver){showActionText(score>mpOpponent.score?'YOU WIN!':score<mpOpponent.score?'YOU LOSE':'DRAW');}
+      return;
+    }
+    if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断';showActionText('OPPONENT LEFT');return}
+  });
+  mpSocket.addEventListener('close',()=>{if(mpConnected){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断'}});
+  mpSocket.addEventListener('error',()=>mpShow('接続できません。Worker URLとサーバーの状態を確認してください'));
+}
+document.getElementById('btn-multiplayer').addEventListener('click',mpOpen);
+document.getElementById('mp-create').addEventListener('click',()=>mpConnect('create'));
+document.getElementById('mp-join').addEventListener('click',()=>mpConnect('join'));
+document.getElementById('mp-close').addEventListener('click',()=>{if(!mpConnected)mpDisconnect();mpClose()});
+const mpOriginalUpdateStats=updateStats;
+updateStats=function(){mpOriginalUpdateStats();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:isGameOver})};
+const mpOriginalTriggerGameOver=triggerGameOver;
+triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:true})};
+window.addEventListener('beforeunload',()=>{if(mpSocket)mpSocket.close()});
+
 </script>
 </body>
 </html>
