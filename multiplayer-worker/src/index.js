@@ -53,7 +53,17 @@ export class GameRoom extends DurableObject {
       return;
     }
 
-    if (msg.type === "attack") {\n      if (!["host", "guest"].includes(attachment.role)) return;\n      const lines = Math.floor(Number(msg.lines));\n      if (!Number.isInteger(lines) || lines < 2 || lines > 4) return;\n      for (const peer of this.sockets()) {\n        if (peer !== ws) this.send(peer, { type: "opponent-attack", lines });\n      }\n      return;\n    }\n\n    if (msg.type === "state") {
+    if (msg.type === "attack") {
+      if (!["host", "guest"].includes(attachment.role)) return;
+      const lines = Math.floor(Number(msg.lines));
+      if (!Number.isInteger(lines) || lines < 2 || lines > 4) return;
+      for (const peer of this.sockets()) {
+        if (peer !== ws) this.send(peer, { type: "opponent-attack", lines });
+      }
+      return;
+    }
+
+    if (msg.type === "state") {
       if (!["host", "guest"].includes(attachment.role)) return;
       const score = Math.max(0, Math.min(999999999, Number(msg.score) || 0));
       const lines = Math.max(0, Math.min(999999, Number(msg.lines) || 0));
