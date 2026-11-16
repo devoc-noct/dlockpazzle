@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-const ROOM_CODE = /^\\d{6}$/;
+const ROOM_CODE = /^\d{6}$/;
 
 export default {
   async fetch(request, env) {
