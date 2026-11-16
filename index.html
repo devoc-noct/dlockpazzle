@@ -48,7 +48,7 @@ canvas.sub-canvas{background:#000;border-radius:4px}
 <div id="mp-overlay"><div id="mp-card">
 <h2>オンライン二人対戦</h2>
 <p>別々の端末で同じ部屋番号を使って参加してね。通信サーバーのURLを入力してから部屋を作成／参加します。</p>
-<input id="mp-endpoint" type="url" placeholder="wss://あなたのWorker名.workers.dev/ws" aria-label="通信サーバーURL">
+<input id="mp-endpoint" type="url" value="https://dlockpazzle-multiplayer.xexex.workers.dev" placeholder="https://あなたのWorker名.workers.dev" aria-label="通信サーバーURL">
 <input id="mp-room-input" inputmode="numeric" maxlength="6" placeholder="部屋番号（参加する場合）" aria-label="部屋番号">
 <div class="mp-actions"><button id="mp-create">部屋を作る</button><button id="mp-join">番号で参加</button></div>
 <div id="mp-room"></div><p id="mp-message">通信サーバー未接続</p>
