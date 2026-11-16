@@ -150,7 +150,7 @@ function mpConnect(mode){
   const raw=mpEndpoint.value.trim();
   if(!raw){mpShow('先にCloudflare WorkerのURLを入力してください');return}
   let endpoint;
-  try{endpoint=new URL(raw);if(endpoint.protocol==='https:')endpoint.protocol='wss:';if(endpoint.protocol==='http:')endpoint.protocol='ws:';if(!['ws:','wss:'].includes(endpoint.protocol))throw new Error('protocol');endpoint.pathname=endpoint.pathname.replace(/\/+?/g,'/').replace(/\/+$/,'');if(!endpoint.pathname.endsWith('/ws'))endpoint.pathname+='/ws';}
+  try{endpoint=new URL(raw);if(endpoint.protocol==='https:')endpoint.protocol='wss:';if(endpoint.protocol==='http:')endpoint.protocol='ws:';if(!['ws:','wss:'].includes(endpoint.protocol))throw new Error('protocol');endpoint.pathname=endpoint.pathname.replace(/\/{2,}/g,'/').replace(/\/+$/,'');if(!endpoint.pathname.endsWith('/ws'))endpoint.pathname+='/ws';}
   catch(e){mpShow('Worker URLを確認してください');return}
   mpRoomCode=mode==='create'?String(Math.floor(100000+Math.random()*900000)):mpRoomInput.value.trim();
   if(!/^\d{6}$/.test(mpRoomCode)){mpShow('部屋番号は6桁の数字です');return}
