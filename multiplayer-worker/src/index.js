@@ -5,7 +5,7 @@ const ROOM_CODE = /^\d{6}$/;
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const pathname = `/${url.pathname.replace(/^\\/+/, "")}`;
+    const pathname = `/${url.pathname.replace(/^\/+/, "")}`;
     if (pathname !== "/ws") return new Response("Multiplayer WebSocket endpoint", { status: 200 });
     if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket upgrade required", { status: 426 });
     const room = url.searchParams.get("room") || "";
