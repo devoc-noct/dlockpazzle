@@ -133,6 +133,7 @@ board=Array.from({length:ROWS},()=>Array(COLS).fill(0));initQueue();spawnPiece()
 
 /* Online multiplayer: independent Cloudflare Worker endpoint. */
 let mpSocket=null,mpRoomCode="",mpRole="",mpConnected=false,mpMatchResult=null,mpOpponent={score:0,lines:0,level:1,gameOver:false};
+let mpHeartbeatTimer=null,mpReconnectTimer=null,mpReconnectAttempts=0,mpManualClose=false,mpLastPong=0,mpConnectMode='';
 const mpOverlay=document.getElementById('mp-overlay');
 const mpEndpoint=document.getElementById('mp-endpoint');
 const mpRoomInput=document.getElementById('mp-room-input');
@@ -142,35 +143,79 @@ function mpShow(message){mpMessage.textContent=message}
 function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)return;mpMatchResult=score>mpOpponent.score?'win':score<mpOpponent.score?'lose':'draw';draw()}
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
+function mpShow(message){mpMessage.textContent=message}
+function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)return;mpMatchResult=score>mpOpponent.score?'win':score<mpOpponent.score?'lose':'draw';draw()}
+function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
+function mpClose(){mpOverlay.classList.remove('open')}
 function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
-
-function mpDisconnect(){if(mpSocket){mpSocket.close(1000,'player left');mpSocket=null}mpConnected=false;mpRoomCode='';mpRole='';document.getElementById('mp-opponent').style.display='none'}
-function mpConnect(mode){
-  if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
+function mpStopHeartbeat(){if(mpHeartbeatTimer){clearInterval(mpHeartbeatTimer);mpHeartbeatTimer=null}}
+function mpStartHeartbeat(){
+  mpStopHeartbeat();mpLastPong=Date.now();
+  mpHeartbeatTimer=setInterval(()=>{
+    if(!mpSocket||mpSocket.readyState!==WebSocket.OPEN)return;
+    if(Date.now()-mpLastPong>45000){mpShow('通信が途切れました。再接続しています…');try{mpSocket.close()}catch{};return}
+    mpSend({type:'heartbeat',sentAt:Date.now()});
+  },15000);
+}
+function mpDisconnect(){
+  mpManualClose=true;clearTimeout(mpReconnectTimer);mpReconnectTimer=null;mpStopHeartbeat();
+  if(mpSocket){const s=mpSocket;mpSocket=null;try{s.close(1000,'player left')}catch{}}
+  mpConnected=false;mpRoomCode='';mpRole='';mpReconnectAttempts=0;
+  document.getElementById('mp-opponent').style.display='none';
+}
+function mpScheduleReconnect(){
+  if(mpManualClose||!mpRoomCode||!mpRole||mpReconnectAttempts>=10){mpShow('接続が切れました。もう一度部屋を作るか参加してください');mpConnected=false;return}
+  const delay=Math.min(1000*Math.pow(2,mpReconnectAttempts),10000);
+  mpReconnectAttempts++;mpConnected=false;
+  mpShow('通信が切れました。'+Math.ceil(delay/1000)+'秒後に再接続します…');
+  clearTimeout(mpReconnectTimer);
+  mpReconnectTimer=setTimeout(()=>mpConnect(mpConnectMode,true),delay);
+}
+function mpConnect(mode,isReconnect=false){
+  if(!isReconnect){
+    if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
+    mpManualClose=false;mpConnectMode=mode;mpReconnectAttempts=0;mpRole='';mpConnected=false;
+  }
   const raw=mpEndpoint.value.trim();
-  if(!raw){mpShow('先にCloudflare WorkerのURLを入力してください');return}
   let endpoint;
   try{endpoint=new URL(raw);if(endpoint.protocol==='https:')endpoint.protocol='wss:';if(endpoint.protocol==='http:')endpoint.protocol='ws:';if(!['ws:','wss:'].includes(endpoint.protocol))throw new Error('protocol');endpoint.pathname='/';}
   catch(e){mpShow('Worker URLを確認してください');return}
-  mpRoomCode=mode==='create'?String(Math.floor(100000+Math.random()*900000)):mpRoomInput.value.trim();
-  if(!/^\d{6}$/.test(mpRoomCode)){mpShow('部屋番号は6桁の数字です');return}
+  if(!isReconnect){
+    mpRoomCode=mode==='create'?String(Math.floor(100000+Math.random()*900000)):mpRoomInput.value.trim();
+    if(!/^\d{6}$/.test(mpRoomCode)){mpShow('部屋番号は6桁の数字です');return}
+  }
   endpoint.searchParams.set('room',mpRoomCode);
-  mpShow('通信サーバーに接続中…');mpRoomDisplay.textContent=mpRoomCode;
-  try{mpSocket=new WebSocket(endpoint.toString())}catch(e){mpShow('接続を開始できませんでした');return}
-  mpSocket.addEventListener('open',()=>{mpSend({type:mode,room:mpRoomCode});mpShow(mode==='create'?'部屋を作成しました。相手の参加を待っています…':'部屋に参加しました。対戦相手を確認中…')});
-  mpSocket.addEventListener('message',event=>{
+  mpShow(isReconnect?'通信サーバーに再接続中…':'通信サーバーに接続中…');mpRoomDisplay.textContent=mpRoomCode;
+  try{mpSocket=new WebSocket(endpoint.toString())}catch(e){if(isReconnect)mpScheduleReconnect();else mpShow('接続を開始できませんでした');return}
+  const thisSocket=mpSocket;
+  thisSocket.addEventListener('open',()=>{
+    if(thisSocket!==mpSocket)return;
+    mpStartHeartbeat();
+    if(isReconnect)mpSend({type:'resume',role:mpRole});
+    else mpSend({type:mode,room:mpRoomCode});
+  });
+  thisSocket.addEventListener('message',event=>{
+    if(thisSocket!==mpSocket)return;
     let data;try{data=JSON.parse(event.data)}catch(e){return}
-    if(data.type==='waiting'){mpShow('部屋を作成しました。相手に6桁の番号を伝えてね');return}
+    if(data.type==='heartbeat-ack'){mpLastPong=Date.now();return}
+    if(data.type==='waiting'){
+      if(!isReconnect||!mpRole)mpRole='host';
+      mpShow('部屋を作成しました。相手に6桁の番号を伝えてね');return;
+    }
     if(data.type==='error'){mpShow(data.message||'接続エラー');return}
     if(data.type==='match-start'){
-      mpConnected=true;mpRole=data.role||'';mpMatchResult=null;mpOpponent={score:0,lines:0,level:1,gameOver:false};
-      mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中';
+      mpConnected=true;mpRole=data.role||mpRole;mpReconnectAttempts=0;mpClose();
+      const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中';
       mpShow('2人の接続が完了しました！');return;
     }
-    if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断';showActionText('OPPONENT LEFT');return}
+    if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断（再接続待ち）';mpShow('相手の通信が切れました。相手の再接続を待っています');return}
   });
-  mpSocket.addEventListener('close',()=>{if(mpConnected){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断'}});
-  mpSocket.addEventListener('error',()=>mpShow('接続できません。Worker URLとサーバーの状態を確認してください'));
+  thisSocket.addEventListener('close',()=>{
+    if(thisSocket!==mpSocket)return;
+    mpStopHeartbeat();mpSocket=null;
+    if(!mpManualClose)mpScheduleReconnect();
+  });
+  thisSocket.addEventListener('error',()=>{if(thisSocket===mpSocket)mpShow('通信エラー。再接続を試します…')});
 }
 document.getElementById('btn-multiplayer').addEventListener('click',mpOpen);
 document.getElementById('mp-create').addEventListener('click',()=>mpConnect('create'));
