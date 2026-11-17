@@ -4,7 +4,6 @@ const ROOM_CODE = /^\d{6}$/;
 
 export default {
   async fetch(request, env) {
-    // Accept WebSocket connections at the root URL; no special /ws path required.
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("WebSocket upgrade required", { status: 426 });
     }
@@ -56,25 +55,6 @@ export class GameRoom extends DurableObject {
       ws.serializeAttachment({ role: "guest" });
       this.send(host, { type: "match-start", role: "host" });
       this.send(ws, { type: "match-start", role: "guest" });
-      return;
-    }
-
-    if (msg.type === "attack") {
-      if (!["host", "guest"].includes(attachment.role)) return;
-      const lines = Math.floor(Number(msg.lines));
-      if (!Number.isInteger(lines) || lines < 2 || lines > 4) return;
-      for (const peer of this.sockets()) if (peer !== ws) this.send(peer, { type: "opponent-attack", lines });
-      return;
-    }
-
-    if (msg.type === "state") {
-      if (!["host", "guest"].includes(attachment.role)) return;
-      const score = Math.max(0, Math.min(999999999, Number(msg.score) || 0));
-      const lines = Math.max(0, Math.min(999999, Number(msg.lines) || 0));
-      const level = Math.max(1, Math.min(999, Number(msg.level) || 1));
-      for (const peer of this.sockets()) if (peer !== ws) {
-        this.send(peer, { type: "opponent-state", score, lines, level, gameOver: !!msg.gameOver });
-      }
     }
   }
 
