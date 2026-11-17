@@ -46,9 +46,9 @@ canvas.sub-canvas{background:#000;border-radius:4px}
 <div class="system-bar"><button class="sys-btn" id="btn-fullscreen">⛶ 全画面表示</button><button class="sys-btn" id="btn-multiplayer">⚔ 二人対戦</button><button class="sys-btn sys-btn-pause" id="btn-pause">⏸ 一時停止</button><button class="sys-btn sys-btn-close" id="btn-close">✕ 閉じる</button></div>
 <div id="mp-opponent">相手: 待機中</div>
 <div id="mp-overlay"><div id="mp-card">
-<h2>オンライン二人対戦</h2>
-<p>別々の端末で同じ部屋番号を使って参加してね。通信サーバーのURLを入力してから部屋を作成／参加します。</p>
-<input id="mp-endpoint" type="url" value="https://dlockpazzle-multiplayer.xexex.workers.dev" placeholder="https://あなたのWorker名.workers.dev" aria-label="通信サーバーURL">
+<h2>オンライン接続テスト</h2>
+<p>別々の端末で同じ部屋番号を使って接続テストをします。</p>
+<input id="mp-endpoint" type="url" value="https://dlockpazzle-multiplayer-preview.xexex.workers.dev" placeholder="https://あなたのWorker名.workers.dev" aria-label="通信サーバーURL">
 <input id="mp-room-input" inputmode="numeric" maxlength="6" placeholder="部屋番号（参加する場合）" aria-label="部屋番号">
 <div class="mp-actions"><button id="mp-create">部屋を作る</button><button id="mp-join">番号で参加</button></div>
 <div id="mp-room"></div><p id="mp-message">通信サーバー未接続</p>
@@ -106,7 +106,7 @@ function checkCollision(x,y,piece){for(let r=0;r<piece.length;r++)for(let c=0;c<
 function rotateSRS(dir){if(isGameOver||isPaused)return false;const oldState=rotationState,newState=(rotationState+dir+4)%4;let nextP=currentPiece.map((_,c)=>currentPiece.map(r=>r[c]));if(dir===1)nextP=nextP.map(row=>row.reverse());else nextP.reverse();const key=`${oldState}->${newState}`;const kicks=currentType===1?I_KICK[key]:currentType===2?[[0,0]]:JLSTZ_KICK[key];if(!kicks)return false;for(let i=0;i<kicks.length;i++){const [ox,oy]=kicks[i],tx=blockX+ox,ty=blockY-oy;if(!checkCollision(tx,ty,nextP)){blockX=tx;blockY=ty;currentPiece=nextP;rotationState=newState;lastActionWasRotate=true;lastKickIndex=i;resetLockTimer();return true}}return false}
 function checkTSpin(){if(currentType!==7||!lastActionWasRotate)return false;const corners=[[blockY,blockX],[blockY,blockX+2],[blockY+2,blockX],[blockY+2,blockX+2]];const occupied=corners.map(([y,x])=>x<0||x>=COLS||y>=ROWS||(y>=0&&board[y][x]!==0));if(occupied.filter(Boolean).length<3)return false;const front=[[0,1],[1,3],[2,3],[0,2]][rotationState];const frontCount=Number(occupied[front[0]])+Number(occupied[front[1]]);return frontCount===2||lastKickIndex===4?'full':'mini'}
 function hardLock(){if(isGameOver||isPaused)return;clearLockTimer();isTSpin=checkTSpin();for(let r=0;r<currentPiece.length;r++)for(let c=0;c<currentPiece[r].length;c++)if(currentPiece[r][c]&&blockY+r>=0)board[blockY+r][blockX+c]=currentType;clearLines();if(!isGameOver){spawnPiece();draw()}}
-function clearLines(){let count=0;for(let r=ROWS-1;r>=0;r--){if(board[r].every(v=>v>0)){board.splice(r,1);board.unshift(Array(COLS).fill(0));count++;r++}}let msg='',pts=0;if(isTSpin==='full'){if(count===0){msg='SPIN BONUS!';pts=400}else if(count===1){msg='SPIN SINGLE!';pts=800}else if(count===2){msg='SPIN DOUBLE!';pts=1200}else if(count===3){msg='SPIN TRIPLE!';pts=1600}}else if(isTSpin==='mini'){if(count===0){msg='MINI SPIN!';pts=100}else if(count===1){msg='MINI SPIN SINGLE!';pts=200}}else if(count>0){pts=[0,100,300,500,800][count]||0;if(count===4)msg='4 LINE CLEAR!'}const pc=board.every(row=>row.every(v=>v===0));if(pc&&count>0){pts+=1500;msg='PERFECT CLEAR!'}if(count>0){if(count>=2&&mpConnected)mpSend({type:'attack',lines:count});renCount++;if(renCount>0){pts+=50*renCount*level;msg=`${renCount} REN!\n`+msg}}else renCount=-1;if(msg)showActionText(msg);if(count>0||isTSpin){linesCleared+=count;score+=pts*level;const nl=Math.floor(linesCleared/10)+1;if(nl>level){level=nl;currentSpeed=Math.max(1,Math.floor(500*Math.pow(.85,level-1)));updateTimer()}updateStats()}isTSpin=false}
+function clearLines(){let count=0;for(let r=ROWS-1;r>=0;r--){if(board[r].every(v=>v>0)){board.splice(r,1);board.unshift(Array(COLS).fill(0));count++;r++}}let msg='',pts=0;if(isTSpin==='full'){if(count===0){msg='SPIN BONUS!';pts=400}else if(count===1){msg='SPIN SINGLE!';pts=800}else if(count===2){msg='SPIN DOUBLE!';pts=1200}else if(count===3){msg='SPIN TRIPLE!';pts=1600}}else if(isTSpin==='mini'){if(count===0){msg='MINI SPIN!';pts=100}else if(count===1){msg='MINI SPIN SINGLE!';pts=200}}else if(count>0){pts=[0,100,300,500,800][count]||0;if(count===4)msg='4 LINE CLEAR!'}const pc=board.every(row=>row.every(v=>v===0));if(pc&&count>0){pts+=1500;msg='PERFECT CLEAR!'}if(count>0){renCount++;if(renCount>0){pts+=50*renCount*level;msg=`${renCount} REN!\n`+msg}}else renCount=-1;if(msg)showActionText(msg);if(count>0||isTSpin){linesCleared+=count;score+=pts*level;const nl=Math.floor(linesCleared/10)+1;if(nl>level){level=nl;currentSpeed=Math.max(1,Math.floor(500*Math.pow(.85,level-1)));updateTimer()}updateStats()}isTSpin=false}
 function showActionText(txt){const el=document.getElementById('action-text');el.textContent=txt;clearTimeout(showActionText.timer);showActionText.timer=setTimeout(()=>{el.textContent=''},1200)}
 function updateStats(){document.getElementById('score').textContent=score;document.getElementById('lines').textContent=linesCleared;document.getElementById('level').textContent=level}
 function updateTimer(){clearInterval(gameInterval);gameInterval=setInterval(()=>{if(isGameOver||isPaused)return;if(!checkCollision(blockX,blockY+1,currentPiece)){blockY++;lastActionWasRotate=false;lastKickIndex=-1;clearLockTimer()}else if(lockTimer===null)lockTimer=setTimeout(hardLock,LOCK_DELAY);draw()},currentSpeed)}
@@ -143,7 +143,7 @@ function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)retu
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
 function mpSend(payload){if(mpSocket&&mpSocket.readyState===WebSocket.OPEN)mpSocket.send(JSON.stringify(payload))}
-function applyGarbageLines(amount){if(isGameOver)return;clearLockTimer();let topOut=false;for(let i=0;i<amount;i++){if(board[0].some(cell=>cell!==0))topOut=true;board.shift();const row=Array(COLS).fill(8);let hole=Math.floor(Math.random()*COLS);if(i>0&&hole===applyGarbageLines.lastHole)hole=(hole+1+Math.floor(Math.random()*(COLS-1)))%COLS;applyGarbageLines.lastHole=hole;row[hole]=0;board.push(row)}if(topOut||checkCollision(blockX,blockY,currentPiece)){triggerGameOver()}else draw()}
+
 function mpDisconnect(){if(mpSocket){mpSocket.close(1000,'player left');mpSocket=null}mpConnected=false;mpRoomCode='';mpRole='';document.getElementById('mp-opponent').style.display='none'}
 function mpConnect(mode){
   if(mpSocket&&mpSocket.readyState===WebSocket.OPEN){mpShow('すでに接続しています');return}
@@ -164,20 +164,8 @@ function mpConnect(mode){
     if(data.type==='error'){mpShow(data.message||'接続エラー');return}
     if(data.type==='match-start'){
       mpConnected=true;mpRole=data.role||'';mpMatchResult=null;mpOpponent={score:0,lines:0,level:1,gameOver:false};
-      mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中 / SCORE 0';
-      resetGame();mpShow('対戦スタート！');return;
-    }
-    if(data.type==='opponent-attack'){
-      const amount=Math.max(2,Math.min(4,Math.floor(Number(data.lines)||0)));
-      if(amount>=2){applyGarbageLines(amount);showActionText('お邪魔 '+amount+' LINE!');}
-      return;
-    }
-    if(data.type==='opponent-state'){
-      mpOpponent={score:Number(data.score)||0,lines:Number(data.lines)||0,level:Number(data.level)||1,gameOver:!!data.gameOver};
-      const status=document.getElementById('mp-opponent');
-      status.textContent='相手: SCORE '+mpOpponent.score+' / LINE '+mpOpponent.lines+(mpOpponent.gameOver?' / FINISH':'');
-      mpCheckResult();
-      return;
+      mpClose();const status=document.getElementById('mp-opponent');status.style.display='block';status.textContent='相手: 接続中';
+      mpShow('2人の接続が完了しました！');return;
     }
     if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断';showActionText('OPPONENT LEFT');return}
   });
@@ -188,10 +176,6 @@ document.getElementById('btn-multiplayer').addEventListener('click',mpOpen);
 document.getElementById('mp-create').addEventListener('click',()=>mpConnect('create'));
 document.getElementById('mp-join').addEventListener('click',()=>mpConnect('join'));
 document.getElementById('mp-close').addEventListener('click',()=>{if(!mpConnected)mpDisconnect();mpClose()});
-const mpOriginalUpdateStats=updateStats;
-updateStats=function(){mpOriginalUpdateStats();if(mpConnected)mpSend({type:'state',score,lines:linesCleared,level,gameOver:isGameOver})};
-const mpOriginalTriggerGameOver=triggerGameOver;
-triggerGameOver=function(){mpOriginalTriggerGameOver();if(mpConnected){mpSend({type:'state',score,lines:linesCleared,level,gameOver:true});mpCheckResult()}};
 window.addEventListener('beforeunload',()=>{if(mpSocket)mpSocket.close()});
 
 </script>
