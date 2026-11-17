@@ -51,7 +51,7 @@ canvas.sub-canvas{background:#000;border-radius:4px}
 <input id="mp-endpoint" type="url" value="https://dlockpazzle-multiplayer-preview.xexex.workers.dev" placeholder="https://あなたのWorker名.workers.dev" aria-label="通信サーバーURL">
 <input id="mp-room-input" inputmode="numeric" maxlength="6" placeholder="部屋番号（参加する場合）" aria-label="部屋番号">
 <div class="mp-actions"><button id="mp-create">部屋を作る</button><button id="mp-join">番号で参加</button></div>
-<div id="mp-room"></div><p id="mp-message">通信サーバー未接続</p>
+<div id="mp-room"></div><p id="mp-message">通信サーバー未接続</p><p id="mp-diagnostics" style="font-size:10px;color:#9aaab5;line-height:1.5;overflow-wrap:anywhere">診断: 未接続</p>
 <button id="mp-close">閉じる</button>
 </div></div>
 <div class="container">
@@ -140,6 +140,8 @@ const mpRoomInput=document.getElementById('mp-room-input');
 const mpMessage=document.getElementById('mp-message');
 const mpRoomDisplay=document.getElementById('mp-room');
 function mpShow(message){mpMessage.textContent=message}
+const mpDiagnostics=document.getElementById('mp-diagnostics');
+function mpDiag(message){mpDiagnostics.textContent='診断: '+message}
 function mpCheckResult(){if(!mpConnected||!isGameOver||!mpOpponent.gameOver)return;mpMatchResult=score>mpOpponent.score?'win':score<mpOpponent.score?'lose':'draw';draw()}
 function mpOpen(){mpOverlay.classList.add('open');mpRoomDisplay.textContent=mpRoomCode}
 function mpClose(){mpOverlay.classList.remove('open')}
@@ -179,17 +181,18 @@ function mpConnect(mode,isReconnect=false){
   const raw=mpEndpoint.value.trim();
   let endpoint;
   try{endpoint=new URL(raw);if(endpoint.protocol==='https:')endpoint.protocol='wss:';if(endpoint.protocol==='http:')endpoint.protocol='ws:';if(!['ws:','wss:'].includes(endpoint.protocol))throw new Error('protocol');endpoint.pathname='/';}
-  catch(e){mpShow('Worker URLを確認してください');return}
+  catch(e){mpShow('Worker URLを確認してください');mpDiag('URL形式エラー: '+String(e));return}
   if(!isReconnect){
     mpRoomCode=mode==='create'?String(Math.floor(100000+Math.random()*900000)):mpRoomInput.value.trim();
     if(!/^\d{6}$/.test(mpRoomCode)){mpShow('部屋番号は6桁の数字です');return}
   }
   endpoint.searchParams.set('room',mpRoomCode);
-  mpShow(isReconnect?'通信サーバーに再接続中…':'通信サーバーに接続中…');mpRoomDisplay.textContent=mpRoomCode;
-  try{mpSocket=new WebSocket(endpoint.toString())}catch(e){if(isReconnect)mpScheduleReconnect();else mpShow('接続を開始できませんでした');return}
+  mpShow(isReconnect?'通信サーバーに再接続中…':'通信サーバーに接続中…');mpDiag('WebSocket開始: '+endpoint.host+' / '+(isReconnect?'再接続':'新規接続'));mpRoomDisplay.textContent=mpRoomCode;
+  try{mpSocket=new WebSocket(endpoint.toString())}catch(e){mpDiag('生成時例外: '+String(e));if(isReconnect)mpScheduleReconnect();else mpShow('接続を開始できませんでした');return}
   const thisSocket=mpSocket;
   thisSocket.addEventListener('open',()=>{
     if(thisSocket!==mpSocket)return;
+    mpDiag('WebSocket open: readyState='+thisSocket.readyState);
     mpStartHeartbeat();
     if(isReconnect)mpSend({type:'resume',role:mpRole});
     else mpSend({type:mode,room:mpRoomCode});
@@ -210,12 +213,13 @@ function mpConnect(mode,isReconnect=false){
     }
     if(data.type==='opponent-left'){mpConnected=false;document.getElementById('mp-opponent').textContent='相手: 切断（再接続待ち）';mpShow('相手の通信が切れました。相手の再接続を待っています');return}
   });
-  thisSocket.addEventListener('close',()=>{
+  thisSocket.addEventListener('close',event=>{
     if(thisSocket!==mpSocket)return;
+    mpDiag('close: code='+event.code+', clean='+event.wasClean+', reason='+(event.reason||'(なし)'));
     mpStopHeartbeat();mpSocket=null;
     if(!mpManualClose)mpScheduleReconnect();
   });
-  thisSocket.addEventListener('error',()=>{if(thisSocket===mpSocket)mpShow('通信エラー。再接続を試します…')});
+  thisSocket.addEventListener('error',()=>{if(thisSocket===mpSocket){mpDiag('WebSocket error（ブラウザから詳細理由は取得できません）');mpShow('通信エラー。再接続を試します…')}});
 }
 document.getElementById('btn-multiplayer').addEventListener('click',mpOpen);
 document.getElementById('mp-create').addEventListener('click',()=>mpConnect('create'));
