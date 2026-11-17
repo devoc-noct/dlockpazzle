@@ -32,7 +32,12 @@ export class GameRoom extends DurableObject {
     try { msg = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw)); }
     catch { this.send(ws, { type: "error", message: "メッセージを読み取れませんでした" }); return; }
 
-    const attachment = ws.deserializeAttachment() || { role: null };
+    let attachment = ws.deserializeAttachment() || { role: null };
+    if (msg.type === "heartbeat") {
+      this.send(ws, { type: "heartbeat-ack", sentAt: msg.sentAt || null });
+      return;
+    }
+
     if (msg.type === "create") {
       const hostExists = this.sockets().some(s => s !== ws && (s.deserializeAttachment() || {}).role === "host");
       if (hostExists || attachment.role) {
@@ -55,6 +60,32 @@ export class GameRoom extends DurableObject {
       ws.serializeAttachment({ role: "guest" });
       this.send(host, { type: "match-start", role: "host" });
       this.send(ws, { type: "match-start", role: "guest" });
+      return;
+    }
+
+    if (msg.type === "resume") {
+      const role = msg.role;
+      if (role !== "host" && role !== "guest") {
+        this.send(ws, { type: "error", message: "再接続情報を確認できませんでした" });
+        return;
+      }
+      for (const oldSocket of this.sockets()) {
+        if (oldSocket === ws) continue;
+        const oldAttachment = oldSocket.deserializeAttachment() || {};
+        if (oldAttachment.role === role) {
+          oldSocket.serializeAttachment({ role: null });
+          try { oldSocket.close(1000, "replaced by reconnect"); } catch {}
+        }
+      }
+      ws.serializeAttachment({ role });
+      const peerRole = role === "host" ? "guest" : "host";
+      const peer = this.sockets().find(s => s !== ws && (s.deserializeAttachment() || {}).role === peerRole);
+      if (peer) {
+        this.send(peer, { type: "match-start", role: peerRole });
+        this.send(ws, { type: "match-start", role });
+      } else {
+        this.send(ws, { type: "waiting" });
+      }
     }
   }
 
